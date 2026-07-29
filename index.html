@@ -848,8 +848,8 @@ body{
 </head>
 <body>
 <div class="sticky-messengers" id="stickyMessengers">
-<a class="btn btn-wa" data-wa="true" data-msg-url="https://wa.me/79172183856" rel="noopener" target="_blank">Написать в WhatsApp</a>
-<a class="btn btn-tg" data-telegram="true" data-msg-url="https://t.me/anna_more_magic" rel="noopener" target="_blank">Написать в Telegram</a>
+<a class="btn btn-wa" data-wa="true" href="https://wa.me/79172183856" rel="noopener" target="_blank">Написать в WhatsApp</a>
+<a class="btn btn-tg" data-telegram="true" href="https://t.me/anna_more_magic" rel="noopener" target="_blank">Написать в Telegram</a>
 </div>
 <section class="hero">
 <div class="container">
@@ -1103,7 +1103,7 @@ function initMessengerIntent(){
     const tgButtons = Array.from(document.querySelectorAll('[data-messenger="tg"],[data-telegram],.btn-tg'));
     const attachIntentHandlers = (buttons, type, targetUrl) => {
         buttons.forEach(btn => {
-            if (btn.tagName === 'A') {
+            if (false && btn.tagName === 'A') {
                 btn.removeAttribute('href');
                 btn.removeAttribute('target');
                 btn.removeAttribute('rel');
