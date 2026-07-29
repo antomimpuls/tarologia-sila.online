@@ -61,6 +61,53 @@ const SITE_STATS_TRACKER_CONFIG = {
     let scrollDepthMax = 0;
     let interactionCount = 0;
 
+    function compactValue(value, maxLength){
+        const normalized = String(value || '').trim();
+        return normalized ? normalized.slice(0, maxLength || 300) : null;
+    }
+
+    function sanitizedReferrer(){
+        try {
+            if (!document.referrer) return null;
+            const parsed = new URL(document.referrer);
+            return compactValue(parsed.origin + parsed.pathname, 2048);
+        } catch (err) { return null; }
+    }
+
+    // Фиксируем атрибуцию сразу при загрузке. К моменту клика по мессенджеру
+    // history/виджеты могут уже очистить query-string; snapshot ниже сохранит
+    // эти поля и для retry/outbound/returned обновлений той же записи.
+    function captureLandingAttribution(){
+        let params;
+        try { params = new URL(location.href).searchParams; }
+        catch (err) { params = new URLSearchParams(); }
+        const attribution = {
+            attribution_version: 1,
+            landing_referrer: sanitizedReferrer()
+        };
+        const limits = {
+            utm_source: 120,
+            utm_medium: 120,
+            utm_campaign: 300,
+            utm_content: 300,
+            utm_term: 300,
+            yclid: 256,
+            gclid: 256
+        };
+        Object.keys(limits).forEach(function(key){
+            const value = compactValue(params.get(key), limits[key]);
+            if (value) attribution[key] = value;
+        });
+        const explicitCampaignId = compactValue(params.get('campaign_id'), 128);
+        if (explicitCampaignId) {
+            attribution.campaign_id = explicitCampaignId;
+        } else if (attribution.utm_campaign && /^\d+$/.test(attribution.utm_campaign)) {
+            attribution.campaign_id = attribution.utm_campaign;
+        }
+        return attribution;
+    }
+    const LANDING_ATTRIBUTION = captureLandingAttribution();
+
     document.addEventListener('scroll', function(){
         try {
             const h = Math.max(document.body.scrollHeight || 0, document.documentElement.scrollHeight || 0);
@@ -93,13 +140,13 @@ const SITE_STATS_TRACKER_CONFIG = {
         }, {passive: true, capture: true});
     });
 
-    // Honeypot-приманка: невидимая ссылка-кнопка вне экрана. Реальный человек
-    // её не видит и не кликнет. Клик по ней = на странице бот, кликающий
-    // элементы вслепую (типичное скликивание по рекламе).
+    // Honeypot-приманка: невидимая безвредная кнопка вне экрана. Здесь нельзя
+    // использовать wa.me/t.me: цель Метрики type=messenger распознаёт такой href
+    // даже у скрытой ссылки и может засчитать ботовый клик как конверсию.
     (function installHoneypot(){
         try {
-            const hp = document.createElement('a');
-            hp.href = 'https://wa.me/79000000000';
+            const hp = document.createElement('button');
+            hp.type = 'button';
             hp.textContent = 'WhatsApp';
             hp.setAttribute('aria-hidden', 'true');
             hp.tabIndex = -1;
@@ -251,7 +298,7 @@ const SITE_STATS_TRACKER_CONFIG = {
     async function track(payload){
         const eventToken = payload.eventToken || createId();
         const dwellMs = Math.max(0, Date.now() - PAGE_LOAD_TS);
-        const initialMeta = {
+        const initialMeta = Object.assign({
             topic: payload.topic || null,
             title: document.title || null,
             dwell_ms: dwellMs,
@@ -266,7 +313,7 @@ const SITE_STATS_TRACKER_CONFIG = {
                 w: window.innerWidth || 0,
                 h: window.innerHeight || 0
             }
-        };
+        }, LANDING_ATTRIBUTION);
         const snapshot = {
             eventToken: eventToken,
             channel: payload.channel,
